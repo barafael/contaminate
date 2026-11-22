@@ -1,0 +1,26 @@
+# Strings that probe how tools handle boundaries.
+# Lines starting with '#' are comments, so no entry here can start with '#'.
+
+# Shorter than the default `strings` minimum length of 4
+abc
+xy
+Q
+# Exactly 4 characters
+abcd
+# Leading and trailing whitespace is kept
+   leading-spaces
+trailing-spaces   
+	leading-tab
+# Format strings and escape-like text
+%s%s%s%n
+%x %p %08x
+{}{:?}{0}
+${HOME}$(id)`id`
+\x41\x42\x43\n\0
+# Quotes and delimiters
+"double" 'single' `back`
+<script>alert(1)</script>
+' OR '1'='1
+a,b;c|d&e
+# Long single line (256 characters)
+CONTAMINATE_LONG_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx

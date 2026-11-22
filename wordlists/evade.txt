@@ -1,0 +1,63 @@
+# Anti-analysis checks: the vendor names, artifacts and API imports that
+# sandbox-evasion heuristics in malware look for. All inert text.
+
+# Virtualization and sandbox vendors
+VMware, Inc.
+innotek GmbH
+VirtualBox
+QEMU
+Xen
+Parallels
+Sandboxie
+Cuckoo Sandbox
+Joe Security
+ANY.RUN
+
+# Analysis tools by process name
+wireshark.exe
+dumpcap.exe
+procmon.exe
+procexp.exe
+x64dbg.exe
+ollydbg.exe
+ida.exe
+ida64.exe
+ghidraRun
+windbg.exe
+fiddler.exe
+httpdebugger.exe
+ProcessHacker.exe
+regshot.exe
+
+# Guest additions, drivers and injected DLLs
+vboxguest
+vmmouse.sys
+vm3dmp.sys
+SbieDll.dll
+npf.sys
+
+# Registry keys checked for VM fingerprints
+HKLM\HARDWARE\DESCRIPTION\System\BIOS
+HKLM\SOFTWARE\VMware, Inc.\VMware Tools
+HKLM\SOFTWARE\Sandboxie
+
+# MAC address OUI prefixes of virtual NICs
+08:00:27
+00:05:69
+00:1C:42
+00:50:56
+
+# Timing and debugger-detection APIs
+QueryPerformanceCounter
+GetTickCount64
+rdtsc
+NtQueryInformationProcess
+CheckRemoteDebuggerPresent
+OutputDebugStringA
+NtSetInformationThread
+
+# Usernames sandboxes commonly run under
+sandbox
+cuckoo
+maltest
+virus

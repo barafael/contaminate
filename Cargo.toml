@@ -8,7 +8,35 @@ build = "build.rs"
 [features]
 default = ["wordlist-canary"]
 # Each `wordlist-<name>` feature pulls in `wordlists/<name>.txt`.
+wordlist-artifacts = []
 wordlist-canary = []
+wordlist-crypto = []
+wordlist-cve = []
+wordlist-edge-cases = []
+wordlist-evade = []
+wordlist-hashes = []
+wordlist-network = []
+wordlist-paths = []
+wordlist-phishing = []
+wordlist-pii = []
 wordlist-secrets = []
+wordlist-suspicious = []
+wordlist-unicode = []
+all-wordlists = [
+    "wordlist-artifacts",
+    "wordlist-canary",
+    "wordlist-crypto",
+    "wordlist-cve",
+    "wordlist-edge-cases",
+    "wordlist-evade",
+    "wordlist-hashes",
+    "wordlist-network",
+    "wordlist-paths",
+    "wordlist-phishing",
+    "wordlist-pii",
+    "wordlist-secrets",
+    "wordlist-suspicious",
+    "wordlist-unicode",
+]
 
 [dependencies]

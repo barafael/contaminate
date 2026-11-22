@@ -1,0 +1,16 @@
+# File system paths and registry keys.
+/etc/passwd
+/etc/shadow
+/tmp/.contaminate/stage2
+/dev/shm/.x
+/proc/self/exe
+~/.ssh/id_rsa
+~/.aws/credentials
+C:\Windows\System32\cmd.exe
+C:\Users\Public\Downloads\update.exe
+%APPDATA%\Microsoft\Windows\Start Menu\Programs\Startup\run.lnk
+%TEMP%\contaminate.tmp
+\\.\pipe\contaminate
+\\fileserver.example.invalid\share$\drop
+HKEY_LOCAL_MACHINE\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+HKCU\Software\Microsoft\Windows\CurrentVersion\RunOnce

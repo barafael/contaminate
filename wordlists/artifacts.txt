@@ -1,0 +1,28 @@
+# Build-environment fingerprints: the debug paths, compiler banners and CI
+# leftovers that `strings` finds in real binaries and attribution tools key on.
+
+# CI workspace paths (GitHub Actions, GitLab CI, Jenkins layouts)
+D:\a\contaminate\contaminate\src\main.rs
+/home/runner/work/contaminate/contaminate/src/main.rs
+/builds/contaminate/contaminate/src/main.rs
+/var/lib/jenkins/workspace/contaminate/src/main.rs
+
+# PDB paths (MSVC embeds these in release binaries too)
+contaminate.pdb
+D:\a\contaminate\contaminate\target\release\deps\contaminate.pdb
+C:\Users\runneradmin\contaminate\target\release\contaminate.pdb
+
+# Cargo registry and rustc sysroot paths
+/home/dev/.cargo/registry/src/index.crates.io-6f17d22bba15001f/contaminate-0.1.0/src/lib.rs
+/rustc/4d91de4e48198da2e33413efdcd9cd2cc0c46688/library/core/src/fmt/mod.rs
+
+# Compiler banners (`.comment` section content)
+gcc version 13.2.0 (Ubuntu 13.2.0-13ubuntu1)
+clang version 18.1.8
+Microsoft (R) C/C++ Optimizing Compiler Version 19.40.33812 for x64
+rustc version 1.85.0 (4d91de4e4 2025-02-17)
+
+# CI metadata
+GITHUB_RUN_ID=0000000001
+GITHUB_SHA=0123456789abcdef0123456789abcdef01234567
+JENKINS_HOME=/var/lib/jenkins

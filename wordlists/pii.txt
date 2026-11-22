@@ -1,0 +1,40 @@
+# PII-shaped strings for DLP and PII scanners.
+# Every value is a documented test number, a range reserved for fiction,
+# or an official example. No real person's data is present.
+
+# Card numbers: official gateway test numbers (Stripe/Adyen docs)
+4111111111111111
+4242424242424242
+4000056655665556
+5555555555554444
+2223003122003222
+378282246310005
+6011111111111117
+4111 1111 1111 1111
+card=4242424242424242 exp=12/28 cvv=123
+
+# Phone numbers: 555-01xx is reserved for fiction (NANP);
+# +44 20 7946 0xxx is Ofcom's drama range.
++1 555-0100
++1 (555) 0199
++44 20 7946 0012
+
+# IBAN/BIC examples from the official IBAN registry and HMRC docs
+GB82WEST12345698765432
+DE89370400440532013000
+FR1420041010050500013M02606
+DEUTDEFF
+
+# SSN: both numbers were published in ads and were never issued by the SSA
+987-65-4321
+078-05-1120
+
+# NHS number: documented test number from the NHS data dictionary
+943 476 5919
+
+# Names, e-mail, address, date of birth
+John Doe
+Jane Doe
+john.doe@example.com
+123 Main Street, Springfield
+DOB: 01/01/1970

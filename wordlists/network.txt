@@ -1,0 +1,18 @@
+# Network indicators for IOC extractors.
+# Uses only reserved names (RFC 2606/6761) and documentation address ranges
+# (RFC 5737, RFC 3849), so nothing points at a real host.
+http://example.com/payload.bin
+https://update.example.net/v2/check?id=0001
+https://cdn.example.org/assets/stage2.dll
+ftp://files.example.test/drop/archive.zip
+ws://c2.example.invalid:8443/socket
+c2.example.invalid
+beacon.contaminate.test
+192.0.2.10
+198.51.100.23:4444
+203.0.113.77
+2001:db8::1
+[2001:db8:85a3::8a2e:370:7334]:443
+user@example.com
+00:00:5e:00:53:01
+User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) contaminate/0.1

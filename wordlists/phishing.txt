@@ -1,0 +1,34 @@
+# Phishing and social-engineering shapes for mail filters and URL scanners.
+# Domains use RFC 2606 reservations (.example/.test/.invalid) or their
+# punycode homoglyph equivalents; no real brand domain is referenced.
+
+# Display-name spoofing
+PayPal <service@paypa1.example.test>
+Microsoft Account <security@example.invalid>
+IT Support <helpdesk@example.test>
+
+# Lookalike domains (ASCII typo- and IDN homoglyph forms)
+www.paypa1.example.test
+www.micros0ft.example.test
+www.аpple.example
+www.xn--pple-43d.example
+www.exämple.test
+www.xn--exmple-cua.test
+
+# Credential-harvest URL shapes
+https://example.com/login?session=expired&reactivate=1
+http://verify-account.example.invalid/signin
+https://account-locked.example.test/unlock?user=admin
+https://example.test/o365/owa/auth/logon.aspx
+
+# Subject lines and urgency phrases
+Your account has been compromised - verify now
+Invoice #0001 due immediately
+Package delivery failed: confirm your address
+Account suspended: action required within 24 hours
+Do not reply to this email, call the number below
+
+# Payload lures
+Please open the attachment and enable content
+shared_document.zip
+invoice_0001.pdf.exe

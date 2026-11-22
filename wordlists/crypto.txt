@@ -1,0 +1,29 @@
+# Cryptocurrency addresses for ransomware-payment and donation-string detectors.
+# All addresses are test vectors copied from the relevant specifications
+# (BIP-173, EIP-55, the Bitcoin Cash address spec, the Bitcoin/Ethereum wikis).
+# None controls funds.
+
+# Bitcoin (BIP-173 and Bitcoin wiki examples)
+1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2
+3J98t1WpEZ73CNmQviecrnyiWrnqRhWNLy
+bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
+bc1qrp33g0q5c5txsp9arysrx4k6zdkfs4nce4xj0gdcccefvpysxf3qccfmv3
+
+# Payment URIs, ransom-note style
+bitcoin:1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2?amount=0.001&label=contaminate
+bitcoin:bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4
+
+# Ethereum (EIP-55 checksum test vectors)
+0x5aAeb6053F3E94C9b9A09f33669435E7Ef1BeAed
+0xfB6916095ca1df60bB79Ce92cE3Ea74c37c5d359
+0xdbF03B407c01E7cD3CBea99509d93f8DDDC8C6FB
+0xD1220A0cf47c7B9Be7A2E6BA89F429762e7b9aDb
+0x0000000000000000000000000000000000000000
+
+# Bitcoin Cash (address spec example)
+bitcoincash:qpm2qsznhks23z7629mms6s4cwef74vcwvy22gdx6a
+
+# Ransom-note phrasing that usually sits next to the addresses
+Send 0.005 BTC to the address below
+Your files will be unlocked after payment confirmation
+BTC payment address

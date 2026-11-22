@@ -1,0 +1,31 @@
+# Well-known file hashes and the EICAR test signature, for hash-based
+# detection (AV blocklists, YARA `hash` modules, threat-intel matchers).
+# All values are public constants of well-known inputs.
+
+# EICAR standard antivirus test signature (industry-standard inert test string).
+# Note: binaries built with this feature may be quarantined by local AV.
+X5O!P%@AP[4\PZX54(P^)7CC)7}$EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*
+
+# Hashes of the empty string
+d41d8cd98f00b204e9800998ecf8427e
+da39a3ee5e6b4b0d3255bfef95601890afd80709
+e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+31d6cfe0d16ae931b73c59d7e0c089c0
+
+# Hashes of "The quick brown fox jumps over the lazy dog"
+9e107d9d372bb6826bd81d3542a419d6
+2fd4e1c67a2d28fced849ee1bb76e7391b93eb12
+d7a8fbb307d7809469ca9abcb0082e4f8d5651e46d3cdb762d02d0bf37c9e592
+
+# Hashes of common weak passwords (what scanners flag in dumps)
+21232f297a57a5a743894a0e4a801fc3
+5f4dcc3b5aa765d61d8327deb882cf99
+
+# EICAR file hashes
+44d88612fea8a8f36de82e1278abb02f
+3395856ce81f2b7382dee72602f798b642f14140
+275a021bbfb6489e54d471899f7db9d1663fc695ec2fe2a2c4538aabf651fd0f
+
+# Labeled forms, as scanners report them
+sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+md5=44d88612fea8a8f36de82e1278abb02f

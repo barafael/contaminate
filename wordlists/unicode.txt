@@ -1,0 +1,17 @@
+# Non-ASCII UTF-8. Note that `strings` only shows ASCII by default;
+# try `strings -e S` or `grep -a`.
+Grüße aus Zürich
+naïve café résumé
+Ελληνικά κείμενο
+Русский текст для проверки
+日本語のテキスト
+中文测试字符串
+한국어 테스트
+مرحبا بالعالم
+שלום עולם
+हिन्दी परीक्षण
+🦀 contaminate 🧪
+e\u0301 literal backslash-u (not an escape)
+ﬁ ligature and Ｆｕｌｌｗｉｄｔｈ
+zero​width​space
+right‮to‬left override
