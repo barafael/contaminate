@@ -16,6 +16,7 @@ wordlist-cve = []
 wordlist-edge-cases = []
 wordlist-evade = []
 wordlist-hashes = []
+wordlist-llm-tripwire = []
 wordlist-network = []
 wordlist-paths = []
 wordlist-phishing = []
@@ -32,6 +33,7 @@ all-wordlists = [
     "wordlist-edge-cases",
     "wordlist-evade",
     "wordlist-hashes",
+    "wordlist-llm-tripwire",
     "wordlist-network",
     "wordlist-paths",
     "wordlist-phishing",
