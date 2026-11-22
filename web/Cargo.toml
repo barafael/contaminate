@@ -1,0 +1,46 @@
+[package]
+name = "contaminate-web"
+version = "0.0.0"
+edition = "2024"
+publish = false
+description = "Browser demo for contaminate, deployed to GitHub Pages"
+license = "MIT OR Apache-2.0"
+
+# Not part of a workspace with the library on purpose: it keeps wasm-bindgen
+# and serde out of the library's lockfile. Build with ./build.sh.
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+# Every bundled list except `hashes`: it holds the EICAR test signature, and an
+# AV hit on the page's own wasm module would make for a poor demo. The page
+# still offers that list, fetched as plain text only when someone picks it.
+contaminate = { path = "..", default-features = false, features = [
+    "wordlist-artifacts",
+    "wordlist-canary",
+    "wordlist-chembio",
+    "wordlist-crypto",
+    "wordlist-cve",
+    "wordlist-edge-cases",
+    "wordlist-evade",
+    "wordlist-llm-tripwire",
+    "wordlist-network",
+    "wordlist-paths",
+    "wordlist-phishing",
+    "wordlist-pii",
+    "wordlist-secrets",
+    "wordlist-suspicious",
+    "wordlist-unicode",
+] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Must match the wasm-bindgen CLI version exactly; build.sh checks this.
+wasm-bindgen = "=0.2.130"
+
+[profile.release]
+codegen-units = 1
+lto = "fat"
+opt-level = "s"
+# No `strip`: wasm-bindgen needs the target_features section. build.sh drops
+# the name and producers sections instead.

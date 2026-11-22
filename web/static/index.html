@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>contaminate demo</title>
+<meta name="description" content="contaminate embeds wordlists into binaries for testing binary-inspection tools. This page's own WebAssembly module is contaminated; see for yourself.">
+<link rel="stylesheet" href="style.css">
+<script type="module" src="app.js"></script>
+</head>
+<body>
+<header class="wrap">
+  <h1>contaminate</h1>
+  <p class="lede">A Rust macro that sprinkles static strings from a wordlist into a binary, for testing
+    tools that inspect binaries: <code>strings</code>, secret scanners, YARA rules, AV, and
+    LLM-based analysis agents. The bytes survive dead-code elimination, LTO and stripping.</p>
+  <nav><a href="https://github.com/barafael/contaminate">GitHub</a></nav>
+</header>
+
+<main class="wrap">
+  <section id="self">
+    <h2>This page is contaminated</h2>
+    <p>The page's logic is Rust compiled to WebAssembly, and that module calls
+      <code>contaminate!()</code> four times. The page fetched its own <code>.wasm</code> file,
+      instantiated it from exactly those bytes, and is now searching them for each copy.</p>
+    <p class="status" id="self-status">Loading the module…</p>
+    <div id="self-body" hidden>
+      <details>
+        <summary>The code compiled into this module</summary>
+        <pre class="code" id="self-source"></pre>
+      </details>
+      <h3>Where each copy ended up</h3>
+      <div class="map" id="self-map" aria-hidden="true"></div>
+      <div class="map-legend" id="self-legend"></div>
+      <div class="scroll"><table id="self-copies">
+        <thead><tr><th>Copy</th><th>Settings</th><th class="num">Bytes</th><th>Found at</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <h3>Word search</h3>
+      <p id="self-words-status"></p>
+      <div class="scroll"><table id="self-words">
+        <thead><tr><th>Encoding</th><th class="num">Words found</th><th>Sections</th></tr></thead>
+        <tbody></tbody>
+      </table></div>
+      <p class="note">Word search looks for each word on its own, in every encoding and under all 256
+        XOR keys. It also finds the plain <code>WORDS</code> array this page uses to know what to
+        look for: those are the extra <code>utf8</code> hits.</p>
+    </div>
+  </section>
+
+  <section id="play">
+    <h2>Playground</h2>
+    <p>Pick wordlists and settings to see the exact bytes <code>contaminate!()</code> would
+      embed, and what a scanner sees in them.</p>
+    <div class="play-grid">
+      <div class="panel">
+        <h3>Wordlists</h3>
+        <ul class="lists" id="lists"><li class="status">Loading…</li></ul>
+        <label class="stack">Your own words <span class="hint">(one per line; <code>#</code> starts a comment)</span>
+          <textarea id="custom-words" rows="3" spellcheck="false" placeholder="MY_TOKEN_123"></textarea>
+        </label>
+      </div>
+      <div class="panel">
+        <h3>Settings</h3>
+        <div class="fields">
+          <label>Encoding
+            <select id="set-encoding">
+              <option value="utf8">UTF-8</option>
+              <option value="utf16le">UTF-16LE</option>
+              <option value="utf16be">UTF-16BE</option>
+            </select>
+          </label>
+          <label>Terminator
+            <select id="set-term">
+              <option value="0">NUL (\0)</option>
+              <option value="10">newline (\n)</option>
+              <option value="none">none</option>
+              <option value="custom">custom…</option>
+            </select>
+          </label>
+          <label id="set-term-custom-wrap" hidden>Custom char
+            <input id="set-term-custom" maxlength="2" value="|">
+          </label>
+          <label>Repeat
+            <input id="set-repeat" type="number" min="1" max="64" value="1">
+          </label>
+          <label>XOR key
+            <input id="set-xor" value="0x00" spellcheck="false">
+          </label>
+        </div>
+        <pre class="code" id="snippet"></pre>
+      </div>
+    </div>
+    <p class="status" id="play-status"></p>
+    <div class="tabs" role="tablist">
+      <button role="tab" data-tab="hex" aria-selected="true">Hex</button>
+      <button role="tab" data-tab="strings" aria-selected="false"><code>strings</code> sees</button>
+      <button role="tab" data-tab="analyze" aria-selected="false"><code>analyze</code> sees</button>
+      <button role="tab" data-tab="words" aria-selected="false">Words</button>
+    </div>
+    <div class="tab-body" id="play-out"></div>
+  </section>
+
+  <section id="file">
+    <h2>Analyze a binary</h2>
+    <p>The <code>analyze</code> example, running in your browser. Files never leave your machine.
+      It labels ELF64 sections and WebAssembly sections and data segments.</p>
+    <div class="drop" id="drop">
+      <input type="file" id="file-input">
+      <label for="file-input"><strong>Choose a file</strong> or drop it here</label>
+      <span class="or">or</span>
+      <button id="use-self">Use this page's .wasm</button>
+      <button id="use-play">Use the playground bytes</button>
+    </div>
+    <div class="fields">
+      <label>Mode
+        <select id="an-mode">
+          <option value="strings">Extract strings</option>
+          <option value="words">Find the playground's words</option>
+        </select>
+      </label>
+      <label>Min length <input id="an-min" type="number" min="1" value="4"></label>
+      <fieldset class="checks"><legend>Encodings</legend>
+        <label><input type="checkbox" value="utf8" checked> UTF-8</label>
+        <label><input type="checkbox" value="utf16le" checked> UTF-16LE</label>
+        <label><input type="checkbox" value="utf16be" checked> UTF-16BE</label>
+      </fieldset>
+      <label>Extra XOR keys <input id="an-xor" placeholder="0x5a, 0xa5" spellcheck="false"></label>
+    </div>
+    <p class="status" id="an-status">No file yet.</p>
+    <div id="an-out"></div>
+  </section>
+</main>
+
+<footer class="wrap">
+  <p>Every list entry is inert text: public constants, spec test vectors, documented example values,
+    RFC-reserved names. The <code>hashes</code> list holds the EICAR antivirus test signature, so it
+    isn't compiled into this page and is only fetched when you select it.</p>
+  <p>MIT OR Apache-2.0 · <a href="https://github.com/barafael/contaminate">source</a></p>
+</footer>
+</body>
+</html>

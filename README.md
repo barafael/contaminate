@@ -10,6 +10,11 @@ LTO, and symbol stripping — even when the invocation sits in a function that
 is never called. Encoding happens at compile time, so it costs nothing at
 runtime. `no_std`, no dependencies.
 
+**[Live demo](https://barafael.github.io/contaminate/)**: the page's own
+WebAssembly module is contaminated, and it finds its copies in itself. It also
+has a settings playground and runs the `analyze` example on files in your
+browser.
+
 ## Quick start
 
 ```toml
@@ -112,7 +117,7 @@ targets (macOS, iOS) the name must have the `segment,section` form, such as
 | `demo` | Four copies with different settings and sections in one binary |
 | `hidden` | Only XOR'd and UTF-16 copies; plain `strings` finds none of them |
 | `selfcheck` | Reads its own executable and exits non-zero if its copy didn't survive the build |
-| `analyze` | A `strings`-style analyzer: UTF-8/UTF-16LE/UTF-16BE, XOR keys, ELF section labels, and a wordlist check mode |
+| `analyze` | A `strings`-style analyzer: UTF-8/UTF-16LE/UTF-16BE, XOR keys, ELF and WebAssembly section labels, and a wordlist check mode |
 
 ```sh
 cargo build --release --examples
@@ -129,6 +134,18 @@ CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_STRIP=symbols cargo run --re
 `analyze -W FILE` checks for the words in any wordlist file instead of the one
 compiled in. ASCII UTF-16LE and UTF-16BE are the same bytes shifted by one,
 so `analyze` reports such matches as `utf16le|be`.
+
+## Web demo
+
+`web/` holds the source of the [demo page](https://barafael.github.io/contaminate/):
+a small wasm crate that calls `contaminate!()` and shares its scanner with the
+`analyze` example. `.github/workflows/pages.yml` deploys it on every push to
+`main`. To build it locally (needs the `wasm32-unknown-unknown` target and the
+`wasm-bindgen` CLI version pinned in `web/Cargo.toml`):
+
+```sh
+web/build.sh && python3 -m http.server -d web/dist
+```
 
 ## Notes
 
