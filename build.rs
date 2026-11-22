@@ -4,8 +4,8 @@
 //! 1. Bundled `wordlists/<name>.txt` for every enabled `wordlist-<name>` feature.
 //! 2. Every file in `CONTAMINATE_WORDLIST` (one or more paths, separated like `PATH`).
 //!
-//! The generated file defines `BLOB`: every word as bytes, each one followed by a
-//! NUL, so tools like `strings` report each word on its own line.
+//! The generated file defines `WORDS`. Encoding (see `Settings`) happens at compile
+//! time in each `contaminate!` invocation.
 
 use std::env;
 use std::fmt::Write as _;
@@ -65,20 +65,10 @@ fn main() {
         );
     }
 
-    let mut blob: Vec<u8> = Vec::new();
-    for w in &words {
-        blob.extend_from_slice(w.as_bytes());
-        blob.push(0);
-    }
-
     let mut out = String::new();
-    writeln!(out, "/// Number of words embedded per `contaminate!()` invocation.").unwrap();
+    writeln!(out, "/// Number of words in the wordlist.").unwrap();
     writeln!(out, "pub const COUNT: usize = {};", words.len()).unwrap();
-    writeln!(out, "/// Length of [`BLOB`] in bytes.").unwrap();
-    writeln!(out, "pub const LEN: usize = {};", blob.len()).unwrap();
-    writeln!(out, "/// All words, each followed by a NUL byte.").unwrap();
-    writeln!(out, "pub const BLOB: [u8; LEN] = *{};", byte_str_literal(&blob)).unwrap();
-    writeln!(out, "/// The words as string slices (for tests and introspection).").unwrap();
+    writeln!(out, "/// The wordlist, in source order.").unwrap();
     writeln!(out, "pub const WORDS: [&str; COUNT] = {words:?};").unwrap();
 
     let out_path = PathBuf::from(env::var_os("OUT_DIR").unwrap()).join("words.rs");
@@ -89,27 +79,11 @@ fn main() {
 /// Leading and trailing whitespace is kept (it may be significant for a test).
 /// Only a trailing `\r` is stripped.
 fn read_wordlist(path: &Path) -> Vec<String> {
-    let text = fs::read_to_string(path).unwrap_or_else(|e| {
-        panic!("contaminate: cannot read wordlist {}: {e}", path.display())
-    });
+    let text = fs::read_to_string(path)
+        .unwrap_or_else(|e| panic!("contaminate: cannot read wordlist {}: {e}", path.display()));
     text.lines()
         .map(|l| l.strip_suffix('\r').unwrap_or(l))
         .filter(|l| !l.is_empty() && !l.starts_with('#'))
         .map(str::to_owned)
         .collect()
-}
-
-fn byte_str_literal(bytes: &[u8]) -> String {
-    let mut s = String::with_capacity(bytes.len() + 3);
-    s.push_str("b\"");
-    for &b in bytes {
-        match b {
-            b'"' => s.push_str("\\\""),
-            b'\\' => s.push_str("\\\\"),
-            0x20..=0x7e => s.push(b as char),
-            _ => write!(s, "\\x{b:02x}").unwrap(),
-        }
-    }
-    s.push('"');
-    s
 }
