@@ -2,8 +2,8 @@
 //!
 //! ```sh
 //! cargo build --release --example demo
-//! strings target/release/examples/demo | grep CONTAMINATE        # UTF-8 copies
-//! strings -e l target/release/examples/demo | grep CONTAMINATE   # UTF-16LE copy
+//! strings target/release/examples/demo | grep CANARY_            # UTF-8 copies
+//! strings -e l target/release/examples/demo | grep CANARY_       # UTF-16LE copy
 //! ```
 
 use contaminate::{Encoding, Settings, contaminate};
