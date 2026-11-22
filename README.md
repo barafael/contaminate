@@ -48,8 +48,8 @@ All sources are combined, in this order:
    `.cargo/config.toml` to have Cargo make them absolute for you.
 
 File format: one word per line. Blank lines and lines starting with `#` are
-ignored; everything else, including leading and trailing whitespace, is kept
-verbatim.
+ignored, as is a leading UTF-8 byte order mark; everything else, including
+leading and trailing whitespace, is kept verbatim.
 
 ## Bundled lists
 
@@ -100,7 +100,9 @@ contaminate!(settings = XORED, section = ".data");
 
 `section = "..."` puts the bytes in a specific link section (default
 `.rodata`). It must stay a string literal — `#[link_section]` requires one —
-which is why it is a macro argument rather than a `Settings` field.
+which is why it is a macro argument rather than a `Settings` field. On Mach-O
+targets (macOS, iOS) the name must have the `segment,section` form, such as
+`"__DATA,__contaminate"`; ELF-style names like `".data"` don't compile there.
 
 ## Examples
 
@@ -117,11 +119,11 @@ cargo build --release --examples
 E=target/release/examples
 
 strings $E/demo | grep CANARY_                # UTF-8 copies
-$E/analyze $E/demo | grep -i canary          # every copy, with offset, section and encoding
+$E/analyze $E/demo | grep -i canary          # every non-XORed copy, with offset, section and encoding
 $E/analyze -x 0x5a $E/hidden                  # also decode with XOR key 0x5a
 $E/analyze -s $E/demo                         # counts per section and encoding
 $E/analyze -w $E/hidden                       # find every word under any encoding/XOR key; exit 1 if any is missing
-RUSTFLAGS="-C lto=fat -C strip=symbols" cargo run --release --example selfcheck
+CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_STRIP=symbols cargo run --release --example selfcheck
 ```
 
 `analyze -W FILE` checks for the words in any wordlist file instead of the one

@@ -163,13 +163,14 @@ fn main() -> ExitCode {
         },
     };
 
-    let mut status = ExitCode::SUCCESS;
+    // 2 (an error) wins over 1 (a missing word), whatever the file order.
+    let mut status: u8 = 0;
     for path in &opts.files {
         let data = match fs::read(path) {
             Ok(d) => d,
             Err(e) => {
                 eprintln!("analyze: {path}: {e}");
-                status = ExitCode::from(2);
+                status = status.max(2);
                 continue;
             }
         };
@@ -181,12 +182,12 @@ fn main() -> ExitCode {
             None => extract(&opts, &data, &sections),
             Some(words) => {
                 if !check_words(&opts, words, &data, &sections) {
-                    status = ExitCode::FAILURE;
+                    status = status.max(1);
                 }
             }
         }
     }
-    status
+    ExitCode::from(status)
 }
 
 /// A string found in extract mode, or a wordlist match in word mode (with empty
@@ -326,8 +327,9 @@ fn scan_utf8<'s>(piece: &[u8], base: usize, run: &mut Run<'s>, hits: &mut Vec<Hi
 /// to plausible-looking CJK. Both byte alignments are scanned.
 fn scan_utf16<'s>(piece: &[u8], base: usize, run: &mut Run<'s>, hits: &mut Vec<Hit<'s>>) {
     for align in 0..2 {
-        let (units, _) = piece.get(align..).unwrap_or_default().as_chunks::<2>();
-        for (k, &pair) in units.iter().enumerate() {
+        let units = piece.get(align..).unwrap_or_default().chunks_exact(2);
+        for (k, pair) in units.enumerate() {
+            let pair = [pair[0], pair[1]];
             let unit = match run.enc {
                 Encoding::Utf16Be => u16::from_be_bytes(pair),
                 _ => u16::from_le_bytes(pair),
@@ -550,21 +552,23 @@ impl Sections {
         let shentsize = at(0x3a, 2)?;
         let shnum = at(0x3c, 2)?;
         let shstrndx = at(0x3e, 2)?;
-        let header = |i: usize| shoff + i * shentsize;
-        let strtab = at(header(shstrndx) + 0x18, 8)?;
+        // The header fields come from the file, so all arithmetic on them is
+        // checked: a malformed or hostile file just yields no section table.
+        let header = |i: usize| shoff.checked_add(i.checked_mul(shentsize)?);
+        let field = |i: usize, o: usize, n: usize| at(header(i)?.checked_add(o)?, n);
+        let strtab = field(shstrndx, 0x18, 8)?;
 
         let mut out = Vec::new();
         for i in 1..shnum {
-            let h = header(i);
             const SHT_NOBITS: usize = 8;
-            if at(h + 4, 4)? == SHT_NOBITS {
+            if field(i, 4, 4)? == SHT_NOBITS {
                 continue;
             }
-            let name_off = strtab + at(h, 4)?;
+            let name_off = strtab.checked_add(field(i, 0, 4)?)?;
             let name_len = d.get(name_off..)?.iter().position(|&b| b == 0)?;
             let name = String::from_utf8_lossy(&d[name_off..name_off + name_len]).into_owned();
-            let (offset, size) = (at(h + 0x18, 8)?, at(h + 0x20, 8)?);
-            out.push((name, offset, offset + size));
+            let (offset, size) = (field(i, 0x18, 8)?, field(i, 0x20, 8)?);
+            out.push((name, offset, offset.saturating_add(size)));
         }
         Some(out)
     }

@@ -23,8 +23,14 @@ const XORED: Settings = Settings {
 
 contaminate!();
 
+// Mach-O section names need the `segment,section` form.
+#[cfg(not(target_vendor = "apple"))]
 mod nested {
     contaminate::contaminate!(section = ".data", settings = super::WIDE);
+}
+#[cfg(target_vendor = "apple")]
+mod nested {
+    contaminate::contaminate!(section = "__DATA,__data", settings = super::WIDE);
 }
 
 #[allow(dead_code)]
@@ -33,6 +39,9 @@ fn never_called() {
 }
 
 fn main() {
+    #[cfg(not(target_vendor = "apple"))]
     contaminate!(section = ".contaminate");
+    #[cfg(target_vendor = "apple")]
+    contaminate!(section = "__DATA,__contaminate");
     println!("demo: {} words per copy", contaminate::COUNT);
 }

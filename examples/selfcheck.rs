@@ -1,10 +1,12 @@
 //! Reads its own executable and checks that its embedded copy of the wordlist
 //! survived compilation, linking and stripping. Exits non-zero if it didn't.
 //!
-//! Handy for trying out profiles and linker flags:
+//! Handy for trying out profiles and linker flags. (Set LTO through the profile,
+//! not `RUSTFLAGS="-C lto"`: that also reaches the build script and fails.)
 //!
 //! ```sh
-//! RUSTFLAGS="-C lto=fat -C strip=symbols" cargo run --release --example selfcheck
+//! CARGO_PROFILE_RELEASE_LTO=fat CARGO_PROFILE_RELEASE_STRIP=symbols \
+//!     cargo run --release --example selfcheck
 //! ```
 //!
 //! The copy uses distinctive settings (UTF-16BE, XOR, newline terminator). That way

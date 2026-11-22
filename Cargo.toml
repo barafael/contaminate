@@ -4,6 +4,7 @@ version = "0.1.0"
 edition = "2024"
 description = "Sprinkle static strings from a wordlist into a binary, for testing binary-inspection tools"
 license = "MIT OR Apache-2.0"
+rust-version = "1.85"
 build = "build.rs"
 
 [features]

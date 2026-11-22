@@ -42,7 +42,9 @@ pub use __private::{COUNT, WORDS};
 /// - `settings = <const expr>`: a [`Settings`] value. Defaults to [`Settings::DEFAULT`].
 /// - `section = "<literal>"`: link section for the bytes. Defaults to `.rodata`.
 ///   This one can't be part of `Settings` because `#[link_section]` only accepts
-///   a string literal.
+///   a string literal. Mach-O targets (macOS, iOS) need the `segment,section`
+///   form, such as `"__DATA,__contaminate"`; ELF-style names like `".data"` are a
+///   compile error there.
 ///
 /// ```
 /// use contaminate::{contaminate, Encoding, Settings};
@@ -52,24 +54,38 @@ pub use __private::{COUNT, WORDS};
 /// const HIDDEN: Settings = Settings { xor: 0x5a, terminator: None, ..Settings::DEFAULT };
 ///
 /// fn f() {
+///     #[cfg(not(target_vendor = "apple"))]
 ///     contaminate!(section = ".data");
 ///     contaminate!(settings = HIDDEN);
+///     #[cfg(not(target_vendor = "apple"))]
 ///     contaminate!(
 ///         settings = Settings { encoding: Encoding::Utf16Le, repeat: 3, ..Settings::DEFAULT },
 ///         section = ".contaminate",
 ///     );
+///     #[cfg(target_vendor = "apple")]
+///     contaminate!(section = "__DATA,__contaminate");
 /// }
 /// ```
 #[macro_export]
 macro_rules! contaminate {
     (@emit $settings:expr; $($section:literal)?) => {
+        // `macro_rules!` hygiene doesn't cover items, so `$settings` sees the names
+        // declared in this block. Keep them unlikely to clash with user constants.
+        // Big wordlists legitimately take a while to encode in const eval.
+        #[allow(long_running_const_eval)]
         const _: () = {
-            const SETTINGS: $crate::Settings = $settings;
-            const LEN: usize = $crate::__private::encoded_len(&$crate::__private::WORDS, &SETTINGS);
+            const __CONTAMINATE_SETTINGS: $crate::Settings = $settings;
+            const __CONTAMINATE_LEN: usize = $crate::__private::encoded_len(
+                &$crate::__private::WORDS,
+                &__CONTAMINATE_SETTINGS,
+            );
             #[used]
             $(#[unsafe(link_section = $section)])?
-            static CONTAMINATE: [u8; LEN] =
-                $crate::__private::encode::<LEN>(&$crate::__private::WORDS, &SETTINGS);
+            static __CONTAMINATE: [u8; __CONTAMINATE_LEN] =
+                $crate::__private::encode::<__CONTAMINATE_LEN>(
+                    &$crate::__private::WORDS,
+                    &__CONTAMINATE_SETTINGS,
+                );
         };
     };
     () => {
@@ -200,6 +216,26 @@ mod tests {
         let text = "# comment\r\nalpha\r\n\n  spaced  \nbeta\r";
         let words: Vec<&str> = super::parse_wordlist(text).collect();
         assert_eq!(words, ["alpha", "  spaced  ", "beta"]);
+    }
+
+    #[test]
+    fn wordlist_bom_is_skipped() {
+        let text = "\u{feff}# comment\nalpha\n";
+        let words: Vec<&str> = super::parse_wordlist(text).collect();
+        assert_eq!(words, ["alpha"]);
+    }
+
+    #[test]
+    fn settings_named_like_macro_internals() {
+        #[allow(dead_code)]
+        const SETTINGS: Settings = Settings {
+            xor: 1,
+            ..Settings::DEFAULT
+        };
+        #[allow(dead_code)]
+        const LEN: Settings = SETTINGS;
+        crate::contaminate!(settings = SETTINGS);
+        crate::contaminate!(settings = LEN);
     }
 
     #[cfg(feature = "wordlist-canary")]
