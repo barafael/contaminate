@@ -45,7 +45,7 @@ impl Default for Settings {
 }
 
 /// Character encoding of the embedded words.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Encoding {
     /// Plain UTF-8, as in Rust and most Unix programs.
     #[default]
@@ -56,25 +56,46 @@ pub enum Encoding {
     Utf16Be,
 }
 
+impl Encoding {
+    /// Encodes `s` at runtime, byte for byte the way `contaminate!` does at compile
+    /// time.
+    pub fn encode(self, s: &str) -> impl Iterator<Item = u8> + '_ {
+        s.chars().flat_map(move |c| self.char_bytes(c))
+    }
+
+    fn char_bytes(self, c: char) -> impl Iterator<Item = u8> {
+        let mut buf = [0u8; 4];
+        let n = encode_char(c, self, &mut buf);
+        buf.into_iter().take(n)
+    }
+}
+
+impl Settings {
+    /// The bytes that `contaminate!(settings = self)` embeds for `words`, computed at
+    /// runtime. Tools that search for an embedded copy can use this.
+    pub fn encode<'a>(self, words: &'a [&'a str]) -> impl Iterator<Item = u8> + 'a {
+        let Self {
+            encoding,
+            terminator,
+            repeat,
+            xor,
+        } = self;
+        (0..repeat)
+            .flat_map(move |_| words.iter())
+            .flat_map(move |w| {
+                let term = terminator
+                    .into_iter()
+                    .flat_map(move |t| encoding.char_bytes(t));
+                encoding.encode(w).chain(term)
+            })
+            .map(move |b| b ^ xor)
+    }
+}
+
 /// Total byte length of the wordlist encoded with `s`.
 #[doc(hidden)]
 pub const fn encoded_len(words: &[&str], s: &Settings) -> usize {
-    let mut per_copy = 0;
-    let mut w = 0;
-    while w < words.len() {
-        let bytes = words[w].as_bytes();
-        let mut i = 0;
-        while i < bytes.len() {
-            let (c, n) = decode_utf8(bytes, i);
-            per_copy += char_len(c, s.encoding);
-            i += n;
-        }
-        if let Some(t) = s.terminator {
-            per_copy += char_len(t as u32, s.encoding);
-        }
-        w += 1;
-    }
-    per_copy * s.repeat
+    write(words, s, None)
 }
 
 /// The wordlist encoded with `s`. `N` must equal [`encoded_len`]. A mismatch is a
@@ -82,6 +103,15 @@ pub const fn encoded_len(words: &[&str], s: &Settings) -> usize {
 #[doc(hidden)]
 pub const fn encode<const N: usize>(words: &[&str], s: &Settings) -> [u8; N] {
     let mut out = [0u8; N];
+    let len = write(words, s, Some(&mut out));
+    assert!(len == N, "contaminate: encoded length mismatch");
+    out
+}
+
+/// Encodes `words` with `s` into `out` and returns the length. With `out == None`,
+/// it only measures.
+const fn write(words: &[&str], s: &Settings, mut out: Option<&mut [u8]>) -> usize {
+    let mut buf = [0u8; 4];
     let mut pos = 0;
     let mut copy = 0;
     while copy < s.repeat {
@@ -91,25 +121,59 @@ pub const fn encode<const N: usize>(words: &[&str], s: &Settings) -> [u8; N] {
             let mut i = 0;
             while i < bytes.len() {
                 let (c, n) = decode_utf8(bytes, i);
-                pos = put_char(&mut out, pos, c, s);
+                let len = encode_char(c, s.encoding, &mut buf);
+                pos = put(&mut out, pos, &buf, len, s.xor);
                 i += n;
             }
             if let Some(t) = s.terminator {
-                pos = put_char(&mut out, pos, t as u32, s);
+                let len = encode_char(t, s.encoding, &mut buf);
+                pos = put(&mut out, pos, &buf, len, s.xor);
             }
             w += 1;
         }
         copy += 1;
     }
-    assert!(pos == N, "contaminate: encoded length mismatch");
-    out
+    pos
+}
+
+const fn put(out: &mut Option<&mut [u8]>, pos: usize, buf: &[u8; 4], len: usize, xor: u8) -> usize {
+    if let Some(out) = out {
+        let mut k = 0;
+        while k < len {
+            out[pos + k] = buf[k] ^ xor;
+            k += 1;
+        }
+    }
+    pos + len
+}
+
+/// Writes `c` in encoding `e` to the start of `buf` and returns the byte count.
+const fn encode_char(c: char, e: Encoding, buf: &mut [u8; 4]) -> usize {
+    match e {
+        Encoding::Utf8 => c.encode_utf8(buf).len(),
+        Encoding::Utf16Le | Encoding::Utf16Be => {
+            let mut units = [0u16; 2];
+            let n = c.encode_utf16(&mut units).len();
+            let mut k = 0;
+            while k < n {
+                let b = match e {
+                    Encoding::Utf16Be => units[k].to_be_bytes(),
+                    _ => units[k].to_le_bytes(),
+                };
+                buf[2 * k] = b[0];
+                buf[2 * k + 1] = b[1];
+                k += 1;
+            }
+            2 * n
+        }
+    }
 }
 
 /// Decodes the char starting at `bytes[i]`. The input is a `&str`, so it's valid
-/// UTF-8. Returns the code point and its length in bytes.
-const fn decode_utf8(bytes: &[u8], i: usize) -> (u32, usize) {
+/// UTF-8. Returns the char and its length in bytes. (`str::chars` isn't const.)
+const fn decode_utf8(bytes: &[u8], i: usize) -> (char, usize) {
     let b0 = bytes[i] as u32;
-    if b0 < 0x80 {
+    let (c, n) = if b0 < 0x80 {
         (b0, 1)
     } else if b0 < 0xE0 {
         (((b0 & 0x1F) << 6) | (bytes[i + 1] as u32 & 0x3F), 2)
@@ -128,65 +192,9 @@ const fn decode_utf8(bytes: &[u8], i: usize) -> (u32, usize) {
                 | (bytes[i + 3] as u32 & 0x3F),
             4,
         )
+    };
+    match char::from_u32(c) {
+        Some(c) => (c, n),
+        None => panic!("invalid UTF-8"),
     }
-}
-
-const fn char_len(c: u32, e: Encoding) -> usize {
-    match e {
-        Encoding::Utf8 => match c {
-            0..0x80 => 1,
-            0x80..0x800 => 2,
-            0x800..0x10000 => 3,
-            _ => 4,
-        },
-        Encoding::Utf16Le | Encoding::Utf16Be => {
-            if c < 0x10000 {
-                2
-            } else {
-                4
-            }
-        }
-    }
-}
-
-const fn put_char<const N: usize>(
-    out: &mut [u8; N],
-    mut pos: usize,
-    c: u32,
-    s: &Settings,
-) -> usize {
-    match s.encoding {
-        Encoding::Utf8 => {
-            let mut buf = [0u8; 4];
-            let n = match char::from_u32(c) {
-                Some(ch) => ch.encode_utf8(&mut buf).len(),
-                None => panic!("invalid char"),
-            };
-            let mut k = 0;
-            while k < n {
-                out[pos] = buf[k] ^ s.xor;
-                pos += 1;
-                k += 1;
-            }
-        }
-        Encoding::Utf16Le | Encoding::Utf16Be => {
-            let mut units = [0u16; 2];
-            let n = match char::from_u32(c) {
-                Some(ch) => ch.encode_utf16(&mut units).len(),
-                None => panic!("invalid char"),
-            };
-            let mut k = 0;
-            while k < n {
-                let b = match s.encoding {
-                    Encoding::Utf16Be => units[k].to_be_bytes(),
-                    _ => units[k].to_le_bytes(),
-                };
-                out[pos] = b[0] ^ s.xor;
-                out[pos + 1] = b[1] ^ s.xor;
-                pos += 2;
-                k += 1;
-            }
-        }
-    }
-    pos
 }

@@ -12,6 +12,9 @@ use std::fmt::Write as _;
 use std::fs;
 use std::path::{Path, PathBuf};
 
+#[path = "src/wordlist.rs"]
+mod wordlist;
+
 const ENV_VAR: &str = "CONTAMINATE_WORDLIST";
 
 fn main() {
@@ -19,6 +22,7 @@ fn main() {
     let bundled_dir = manifest_dir.join("wordlists");
 
     println!("cargo::rerun-if-changed=build.rs");
+    println!("cargo::rerun-if-changed=src/wordlist.rs");
     println!("cargo::rerun-if-changed={}", bundled_dir.display());
     println!("cargo::rerun-if-env-changed={ENV_VAR}");
 
@@ -75,15 +79,8 @@ fn main() {
     fs::write(out_path, out).unwrap();
 }
 
-/// One word per line. Blank lines and lines starting with `#` are skipped.
-/// Leading and trailing whitespace is kept (it may be significant for a test).
-/// Only a trailing `\r` is stripped.
 fn read_wordlist(path: &Path) -> Vec<String> {
     let text = fs::read_to_string(path)
         .unwrap_or_else(|e| panic!("contaminate: cannot read wordlist {}: {e}", path.display()));
-    text.lines()
-        .map(|l| l.strip_suffix('\r').unwrap_or(l))
-        .filter(|l| !l.is_empty() && !l.starts_with('#'))
-        .map(str::to_owned)
-        .collect()
+    wordlist::parse_wordlist(&text).map(str::to_owned).collect()
 }

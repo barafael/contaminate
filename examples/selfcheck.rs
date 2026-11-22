@@ -9,6 +9,7 @@
 //!
 //! The copy uses distinctive settings (UTF-16BE, XOR, newline terminator). That way
 //! the check can't be fooled by the plain `WORDS` strings this program also contains.
+//! Any `CHECK` works: the expected bytes come from `Settings::encode`.
 
 use contaminate::{Encoding, Settings, WORDS, contaminate};
 use std::process::ExitCode;
@@ -27,16 +28,10 @@ fn unreachable_copy() {
 }
 
 /// Recomputes at runtime the bytes the macro produced at compile time.
+/// `black_box` keeps the optimizer from folding the result into a constant, which
+/// would put a second copy of the expected bytes into the binary.
 fn expected_blob() -> Vec<u8> {
-    let mut text = String::new();
-    for w in WORDS {
-        text.push_str(w);
-        text.extend(CHECK.terminator);
-    }
-    text.encode_utf16()
-        .flat_map(u16::to_be_bytes)
-        .map(|b| b ^ CHECK.xor)
-        .collect()
+    std::hint::black_box(CHECK).encode(&WORDS).collect()
 }
 
 fn main() -> ExitCode {

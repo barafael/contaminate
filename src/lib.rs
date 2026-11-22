@@ -15,13 +15,16 @@
 //! - Files named in the `CONTAMINATE_WORDLIST` env var at build time (several paths
 //!   may be separated like `PATH`).
 //!
-//! Format: one word per line. Blank lines and lines starting with `#` are ignored.
+//! Format: one word per line. Blank lines and lines starting with `#` are ignored
+//! (see [`parse_wordlist`]).
 
 #![no_std]
 
 mod settings;
+mod wordlist;
 
 pub use settings::{Encoding, Settings};
+pub use wordlist::parse_wordlist;
 
 #[doc(hidden)]
 pub mod __private {
@@ -159,6 +162,44 @@ mod tests {
         let joined: String = WORDS.iter().flat_map(|w| [*w, "\0"]).collect();
         assert_eq!(blob.as_slice(), joined.as_bytes());
         assert_eq!(WORDS.len(), COUNT);
+    }
+
+    #[test]
+    fn runtime_encoder_matches_const() {
+        macro_rules! check {
+            ($($s:expr),* $(,)?) => {$({
+                const S: Settings = $s;
+                const LEN: usize = encoded_len(W, &S);
+                let runtime: Vec<u8> = S.encode(W).collect();
+                assert_eq!(runtime, encode::<LEN>(W, &S), "{S:?}");
+            })*};
+        }
+        check!(
+            Settings::DEFAULT,
+            Settings {
+                terminator: None,
+                xor: 0x5a,
+                ..Settings::DEFAULT
+            },
+            Settings {
+                encoding: Encoding::Utf16Le,
+                repeat: 3,
+                ..Settings::DEFAULT
+            },
+            Settings {
+                encoding: Encoding::Utf16Be,
+                terminator: Some('🦀'),
+                xor: 0xa5,
+                repeat: 2
+            },
+        );
+    }
+
+    #[test]
+    fn wordlist_format() {
+        let text = "# comment\r\nalpha\r\n\n  spaced  \nbeta\r";
+        let words: Vec<&str> = super::parse_wordlist(text).collect();
+        assert_eq!(words, ["alpha", "  spaced  ", "beta"]);
     }
 
     #[cfg(feature = "wordlist-canary")]

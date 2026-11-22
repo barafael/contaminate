@@ -17,7 +17,8 @@
 //! cargo run --release --example analyze -- -w target/release/examples/hidden
 //! ```
 
-use std::collections::BTreeMap;
+use contaminate::Encoding;
+use std::collections::{BTreeMap, HashMap};
 use std::process::ExitCode;
 use std::{env, fs};
 
@@ -40,30 +41,23 @@ Shorter words are tried only with key 0 and any -x keys. ASCII UTF-16BE and
 UTF-16LE look alike when shifted by one byte; such matches show as utf16le|be.
 ";
 
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-enum Enc {
-    Utf8,
-    Utf16Le,
-    Utf16Be,
+const ALL_ENCODINGS: [Encoding; 3] = [Encoding::Utf8, Encoding::Utf16Le, Encoding::Utf16Be];
+
+/// Label for a match. ASCII UTF-16LE and UTF-16BE are the same bytes shifted by
+/// one, so a match can be either; see [`merge_utf16_twins`].
+fn enc_name(enc: Encoding, ambiguous: bool) -> &'static str {
+    match (enc, ambiguous) {
+        (Encoding::Utf8, _) => "utf8",
+        (_, true) => "utf16le|be",
+        (Encoding::Utf16Le, false) => "utf16le",
+        (Encoding::Utf16Be, false) => "utf16be",
+    }
 }
 
-impl Enc {
-    const ALL: [Enc; 3] = [Enc::Utf8, Enc::Utf16Le, Enc::Utf16Be];
-
-    fn name(self) -> &'static str {
-        match self {
-            Enc::Utf8 => "utf8",
-            Enc::Utf16Le => "utf16le",
-            Enc::Utf16Be => "utf16be",
-        }
-    }
-
-    fn encode(self, s: &str) -> Vec<u8> {
-        match self {
-            Enc::Utf8 => s.as_bytes().to_vec(),
-            Enc::Utf16Le => s.encode_utf16().flat_map(u16::to_le_bytes).collect(),
-            Enc::Utf16Be => s.encode_utf16().flat_map(u16::to_be_bytes).collect(),
-        }
+fn label(name: &str, key: u8) -> String {
+    match key {
+        0 => name.to_string(),
+        k => format!("{name}^{k:#04x}"),
     }
 }
 
@@ -76,7 +70,7 @@ enum Wordlist {
 struct Opts {
     files: Vec<String>,
     min_len: usize,
-    encodings: Vec<Enc>,
+    encodings: Vec<Encoding>,
     xor_keys: Vec<u8>,
     summary: bool,
     wordlist: Wordlist,
@@ -86,7 +80,7 @@ fn parse_args() -> Result<Opts, String> {
     let mut o = Opts {
         files: Vec::new(),
         min_len: 4,
-        encodings: Enc::ALL.to_vec(),
+        encodings: ALL_ENCODINGS.to_vec(),
         xor_keys: vec![0],
         summary: false,
         wordlist: Wordlist::None,
@@ -101,17 +95,19 @@ fn parse_args() -> Result<Opts, String> {
             }
             "-n" | "--min-len" => {
                 let v = value(&a)?;
-                o.min_len = v.parse().map_err(|_| format!("bad length: {v}"))?;
-                o.min_len = o.min_len.max(1);
+                o.min_len = v
+                    .parse::<usize>()
+                    .map_err(|_| format!("bad length: {v}"))?
+                    .max(1);
             }
             "-e" | "--encoding" => {
                 o.encodings.clear();
                 for e in value(&a)?.split(',') {
                     match e {
-                        "utf8" => o.encodings.push(Enc::Utf8),
-                        "utf16le" => o.encodings.push(Enc::Utf16Le),
-                        "utf16be" => o.encodings.push(Enc::Utf16Be),
-                        "all" => o.encodings.extend(Enc::ALL),
+                        "utf8" => o.encodings.push(Encoding::Utf8),
+                        "utf16le" => o.encodings.push(Encoding::Utf16Le),
+                        "utf16be" => o.encodings.push(Encoding::Utf16Be),
+                        "all" => o.encodings.extend(ALL_ENCODINGS),
                         _ => return Err(format!("unknown encoding: {e}")),
                     }
                 }
@@ -151,16 +147,15 @@ fn main() -> ExitCode {
         }
     };
 
-    let words: Vec<String> = match &opts.wordlist {
-        Wordlist::None => Vec::new(),
-        Wordlist::Builtin => contaminate::WORDS.iter().map(|w| w.to_string()).collect(),
+    let words: Option<Vec<String>> = match &opts.wordlist {
+        Wordlist::None => None,
+        Wordlist::Builtin => Some(contaminate::WORDS.map(String::from).to_vec()),
         Wordlist::File(path) => match fs::read_to_string(path) {
-            Ok(text) => text
-                .lines()
-                .map(|l| l.strip_suffix('\r').unwrap_or(l))
-                .filter(|l| !l.is_empty() && !l.starts_with('#'))
-                .map(str::to_owned)
-                .collect(),
+            Ok(text) => Some(
+                contaminate::parse_wordlist(&text)
+                    .map(String::from)
+                    .collect(),
+            ),
             Err(e) => {
                 eprintln!("analyze: {path}: {e}");
                 return ExitCode::from(2);
@@ -182,10 +177,10 @@ fn main() -> ExitCode {
             println!("==> {path} <==");
         }
         let sections = Sections::parse(&data);
-        match opts.wordlist {
-            Wordlist::None => extract(&opts, &data, &sections),
-            _ => {
-                if !check_words(&opts, &words, &data, &sections) {
+        match &words {
+            None => extract(&opts, &data, &sections),
+            Some(words) => {
+                if !check_words(&opts, words, &data, &sections) {
                     status = ExitCode::FAILURE;
                 }
             }
@@ -194,32 +189,59 @@ fn main() -> ExitCode {
     status
 }
 
-// ---------------------------------------------------------------------------
-// Extract mode
-
-struct Hit {
+/// A string found in extract mode, or a wordlist match in word mode (with empty
+/// `text`).
+struct Hit<'s> {
     offset: usize,
     chars: usize,
-    enc: Enc,
+    enc: Encoding,
     key: u8,
-    /// UTF-16 only: the bytes read the same as the other byte order, shifted by one.
     ambiguous: bool,
+    section: &'s str,
     text: String,
 }
 
-impl Hit {
-    fn label(&self) -> String {
-        let label = enc_label(self.enc, self.key);
-        if self.ambiguous {
-            label.replacen(self.enc.name(), "utf16le|be", 1)
-        } else {
-            label
-        }
+impl Hit<'_> {
+    fn name(&self) -> &'static str {
+        enc_name(self.enc, self.ambiguous)
     }
 }
 
+/// An ASCII UTF-16LE string at offset `x` is, byte for byte, a UTF-16BE string at
+/// `x - 1` (and, minus its first char, at `x + 1`). For each such pair under the
+/// same key, keep the longer hit. On a tie, keep the LE one (the usual case, as in
+/// Windows binaries) and mark it ambiguous. UTF-8 hits pass through unchanged.
+fn merge_utf16_twins(mut hits: Vec<Hit<'_>>) -> Vec<Hit<'_>> {
+    hits.sort_by_key(|h| (std::cmp::Reverse(h.chars), h.enc, h.offset));
+    let mut kept: Vec<Hit> = Vec::with_capacity(hits.len());
+    let mut by_pos: HashMap<(usize, u8, Encoding), usize> = HashMap::new();
+    for h in hits {
+        let other = match h.enc {
+            Encoding::Utf8 => None,
+            Encoding::Utf16Le => Some(Encoding::Utf16Be),
+            Encoding::Utf16Be => Some(Encoding::Utf16Le),
+        };
+        let twin = other.and_then(|o| {
+            [h.offset.wrapping_sub(1), h.offset + 1]
+                .into_iter()
+                .find_map(|off| by_pos.get(&(off, h.key, o)).copied())
+        });
+        match twin {
+            Some(i) => kept[i].ambiguous |= kept[i].chars == h.chars,
+            None => {
+                by_pos.insert((h.offset, h.key, h.enc), kept.len());
+                kept.push(h);
+            }
+        }
+    }
+    kept
+}
+
+// ---------------------------------------------------------------------------
+// Extract mode
+
 fn extract(opts: &Opts, data: &[u8], sections: &Sections) {
-    let cuts = sections.starts();
+    let pieces = sections.pieces(data.len());
     let mut hits = Vec::new();
     for &key in &opts.xor_keys {
         let decoded: Vec<u8>;
@@ -230,24 +252,26 @@ fn extract(opts: &Opts, data: &[u8], sections: &Sections) {
             &decoded
         };
         let mut wide = Vec::new();
-        for &enc in &opts.encodings {
-            match enc {
-                Enc::Utf8 => scan_utf8(bytes, key, opts.min_len, &cuts, &mut hits),
-                Enc::Utf16Le | Enc::Utf16Be => {
-                    scan_utf16(bytes, enc, key, opts.min_len, &cuts, &mut wide)
+        for (range, section) in &pieces {
+            let piece = &bytes[range.clone()];
+            for &enc in &opts.encodings {
+                let mut run = Run::new(enc, key, opts.min_len, section);
+                match enc {
+                    Encoding::Utf8 => scan_utf8(piece, range.start, &mut run, &mut hits),
+                    _ => scan_utf16(piece, range.start, &mut run, &mut wide),
                 }
             }
         }
-        hits.extend(dedup_wide(wide));
+        hits.extend(merge_utf16_twins(wide));
     }
     hits.sort_by_key(|h| (h.offset, h.enc, h.key));
 
     if opts.summary {
         let mut by_section: BTreeMap<&str, usize> = BTreeMap::new();
-        let mut by_enc: BTreeMap<String, usize> = BTreeMap::new();
+        let mut by_enc: BTreeMap<(&str, u8), usize> = BTreeMap::new();
         for h in &hits {
-            *by_section.entry(sections.name_at(h.offset)).or_default() += 1;
-            *by_enc.entry(h.label()).or_default() += 1;
+            *by_section.entry(h.section).or_default() += 1;
+            *by_enc.entry((h.name(), h.key)).or_default() += 1;
         }
         println!("{} strings", hits.len());
         println!("\nby section:");
@@ -255,8 +279,8 @@ fn extract(opts: &Opts, data: &[u8], sections: &Sections) {
             println!("  {s:<24} {n:>8}");
         }
         println!("\nby encoding:");
-        for (e, n) in by_enc {
-            println!("  {e:<24} {n:>8}");
+        for ((name, key), n) in by_enc {
+            println!("  {:<24} {n:>8}", label(name, key));
         }
         return;
     }
@@ -265,17 +289,10 @@ fn extract(opts: &Opts, data: &[u8], sections: &Sections) {
         println!(
             "{:#010x}  {:<20} {:<16} {}",
             h.offset,
-            sections.name_at(h.offset),
-            h.label(),
+            h.section,
+            label(h.name(), h.key),
             h.text.escape_debug()
         );
-    }
-}
-
-fn enc_label(enc: Enc, key: u8) -> String {
-    match key {
-        0 => enc.name().to_string(),
-        k => format!("{}^{k:#04x}", enc.name()),
     }
 }
 
@@ -285,101 +302,69 @@ fn is_text(c: char) -> bool {
     c == '\t' || !c.is_control()
 }
 
-/// `cuts` are sorted section start offsets. A run never spans one, so the zero
-/// padding between sections (which XOR turns into printable bytes) can't glue
-/// unrelated data onto a string.
-fn scan_utf8(data: &[u8], key: u8, min_len: usize, cuts: &[usize], hits: &mut Vec<Hit>) {
-    let mut run = Run::default();
-    let mut i = 0;
-    while i < data.len() {
-        let n = match data[i] {
-            0x00..=0x7f => 1,
-            0xc2..=0xdf => 2,
-            0xe0..=0xef => 3,
-            0xf0..=0xf4 => 4,
-            _ => 0,
-        };
-        let ch = data
-            .get(i..i + n)
-            .filter(|_| n > 0)
-            .and_then(|b| std::str::from_utf8(b).ok())
-            .and_then(|s| s.chars().next());
-        match ch {
-            Some(c) if is_text(c) => {
-                if cuts.binary_search(&i).is_ok() {
-                    run.flush(Enc::Utf8, key, min_len, hits);
-                }
-                run.push(i, c);
-                i += n;
-            }
-            _ => {
-                run.flush(Enc::Utf8, key, min_len, hits);
-                i += 1;
+/// Scans one section piece. `base` is the piece's file offset.
+fn scan_utf8<'s>(piece: &[u8], base: usize, run: &mut Run<'s>, hits: &mut Vec<Hit<'s>>) {
+    let mut off = base;
+    for chunk in piece.utf8_chunks() {
+        for (i, c) in chunk.valid().char_indices() {
+            if is_text(c) {
+                run.push(off + i, c);
+            } else {
+                run.flush(hits);
             }
         }
+        if !chunk.invalid().is_empty() {
+            run.flush(hits);
+        }
+        off += chunk.valid().len() + chunk.invalid().len();
     }
-    run.flush(Enc::Utf8, key, min_len, hits);
+    run.flush(hits);
 }
 
 /// Like `strings -e l` / `-e b`: only code units below U+0100 count as text
 /// (ASCII plus Latin-1). Without that rule, any ASCII text read as UTF-16 decodes
 /// to plausible-looking CJK. Both byte alignments are scanned.
-fn scan_utf16(data: &[u8], enc: Enc, key: u8, min_len: usize, cuts: &[usize], hits: &mut Vec<Hit>) {
+fn scan_utf16<'s>(piece: &[u8], base: usize, run: &mut Run<'s>, hits: &mut Vec<Hit<'s>>) {
     for align in 0..2 {
-        let mut run = Run::default();
-        let mut i = align;
-        while i + 1 < data.len() {
-            let pair = [data[i], data[i + 1]];
-            let unit = match enc {
-                Enc::Utf16Be => u16::from_be_bytes(pair),
+        let (units, _) = piece.get(align..).unwrap_or_default().as_chunks::<2>();
+        for (k, &pair) in units.iter().enumerate() {
+            let unit = match run.enc {
+                Encoding::Utf16Be => u16::from_be_bytes(pair),
                 _ => u16::from_le_bytes(pair),
             };
-            match char::from_u32(unit as u32) {
-                Some(c) if unit < 0x100 && is_text(c) => {
-                    if cuts.binary_search(&i).is_ok() || cuts.binary_search(&(i + 1)).is_ok() {
-                        run.flush(enc, key, min_len, hits);
-                    }
-                    run.push(i, c);
-                }
-                _ => run.flush(enc, key, min_len, hits),
+            match u8::try_from(unit).map(char::from) {
+                Ok(c) if is_text(c) => run.push(base + align + 2 * k, c),
+                _ => run.flush(hits),
             }
-            i += 2;
         }
-        run.flush(enc, key, min_len, hits);
+        run.flush(hits);
     }
 }
 
-/// An ASCII UTF-16LE string at offset `x` is, byte for byte, a UTF-16BE string at
-/// `x - 1` (and, minus its first char, at `x + 1`). For each such pair under the
-/// same key, keep the longer hit. On a tie, keep the LE one and mark it ambiguous.
-fn dedup_wide(mut wide: Vec<Hit>) -> Vec<Hit> {
-    wide.sort_by_key(|h| (std::cmp::Reverse(h.chars), h.enc));
-    let mut kept: Vec<Hit> = Vec::new();
-    let mut by_pos: std::collections::HashMap<(usize, u8), usize> = Default::default();
-    for h in wide {
-        let twin = [h.offset.wrapping_sub(1), h.offset + 1]
-            .iter()
-            .filter_map(|&o| by_pos.get(&(o, h.key)).copied())
-            .find(|&i| kept[i].enc != h.enc);
-        match twin {
-            Some(i) => kept[i].ambiguous |= kept[i].chars == h.chars,
-            None => {
-                by_pos.insert((h.offset, h.key), kept.len());
-                kept.push(h);
-            }
-        }
-    }
-    kept
-}
-
-#[derive(Default)]
-struct Run {
+/// The string being collected by a scanner. The buffer is reused across runs.
+struct Run<'s> {
+    enc: Encoding,
+    key: u8,
+    min_len: usize,
+    section: &'s str,
     start: usize,
     chars: usize,
     text: String,
 }
 
-impl Run {
+impl<'s> Run<'s> {
+    fn new(enc: Encoding, key: u8, min_len: usize, section: &'s str) -> Self {
+        Self {
+            enc,
+            key,
+            min_len,
+            section,
+            start: 0,
+            chars: 0,
+            text: String::new(),
+        }
+    }
+
     fn push(&mut self, at: usize, c: char) {
         if self.chars == 0 {
             self.start = at;
@@ -388,66 +373,92 @@ impl Run {
         self.text.push(c);
     }
 
-    fn flush(&mut self, enc: Enc, key: u8, min_len: usize, hits: &mut Vec<Hit>) {
-        if self.chars >= min_len {
+    fn flush(&mut self, hits: &mut Vec<Hit<'s>>) {
+        if self.chars >= self.min_len {
             hits.push(Hit {
                 offset: self.start,
                 chars: self.chars,
-                enc,
-                key,
+                enc: self.enc,
+                key: self.key,
                 ambiguous: false,
+                section: self.section,
                 text: std::mem::take(&mut self.text),
             });
+        } else {
+            self.text.clear();
         }
-        *self = Run::default();
+        self.chars = 0;
     }
 }
 
 // ---------------------------------------------------------------------------
 // Word mode
 
+struct Needle {
+    word: usize,
+    enc: Encoding,
+    bytes: Vec<u8>,
+    /// Try all 256 XOR keys, not just the `-x` ones.
+    brute: bool,
+}
+
 /// Returns true if every word was found at least once.
 fn check_words(opts: &Opts, words: &[String], data: &[u8], sections: &Sections) -> bool {
-    // (word index, encoding label) -> section -> count
-    let mut found: BTreeMap<(usize, String), BTreeMap<&str, usize>> = BTreeMap::new();
-    for (wi, word) in words.iter().enumerate() {
-        let mut hits: Vec<(usize, Enc, u8)> = Vec::new();
-        for &enc in &opts.encodings {
-            let needle = enc.encode(word);
-            let brute = needle.len() >= 8;
-            hits.extend(
-                find_xored(data, &needle, brute, &opts.xor_keys)
-                    .into_iter()
-                    .map(|(off, key)| (off, enc, key)),
-            );
-        }
-        for (off, label) in collapse_utf16_pairs(hits) {
-            *found
-                .entry((wi, label))
-                .or_default()
-                .entry(sections.name_at(off))
-                .or_default() += 1;
-        }
+    let needles: Vec<Needle> = words
+        .iter()
+        .enumerate()
+        .flat_map(|(word, w)| {
+            opts.encodings.iter().map(move |&enc| {
+                let bytes: Vec<u8> = enc.encode(w).collect();
+                let brute = bytes.len() >= 8;
+                Needle {
+                    word,
+                    enc,
+                    bytes,
+                    brute,
+                }
+            })
+        })
+        .collect();
+
+    let mut by_word: Vec<Vec<Hit>> = (0..words.len()).map(|_| Vec::new()).collect();
+    for (offset, n, key) in find_xored(data, &needles, &opts.xor_keys) {
+        by_word[n.word].push(Hit {
+            offset,
+            chars: n.bytes.len(),
+            enc: n.enc,
+            key,
+            ambiguous: false,
+            section: sections.name_at(offset),
+            text: String::new(),
+        });
     }
 
     let mut missing = Vec::new();
     println!("{:<42} {:<16} {:>5}  SECTIONS", "WORD", "ENCODING", "HITS");
-    for (wi, word) in words.iter().enumerate() {
-        let mut any = false;
-        for ((_, label), secs) in found.range((wi, String::new())..(wi + 1, String::new())) {
-            any = true;
+    for (word, hits) in words.iter().zip(by_word) {
+        // (encoding name, key) -> section -> count
+        let mut found: BTreeMap<(&str, u8), BTreeMap<&str, usize>> = BTreeMap::new();
+        for h in merge_utf16_twins(hits) {
+            *found
+                .entry((h.name(), h.key))
+                .or_default()
+                .entry(h.section)
+                .or_default() += 1;
+        }
+        if found.is_empty() {
+            missing.push(word);
+        }
+        for ((name, key), secs) in found {
             let total: usize = secs.values().sum();
             let secs: Vec<String> = secs.iter().map(|(s, n)| format!("{s}×{n}")).collect();
             println!(
                 "{:<42} {:<16} {:>5}  {}",
                 truncate(&format!("{word:?}"), 42),
-                label,
+                label(name, key),
                 total,
                 secs.join(", ")
             );
-        }
-        if !any {
-            missing.push(word);
         }
     }
 
@@ -462,54 +473,44 @@ fn check_words(opts: &Opts, words: &[String], data: &[u8], sections: &Sections) 
     missing.is_empty()
 }
 
-/// For ASCII text, UTF-16BE at offset `x` and UTF-16LE at `x + 1` are the same
-/// bytes, so one wide copy often matches both. A BE hit at `x` paired with an LE hit
-/// at `x + 1` under the same key is reported once, as `utf16le|be`, since the bytes
-/// alone can't tell which one it is. Returns `(offset, label)` pairs.
-fn collapse_utf16_pairs(hits: Vec<(usize, Enc, u8)>) -> Vec<(usize, String)> {
-    let le: std::collections::HashSet<(usize, u8)> = hits
-        .iter()
-        .filter(|h| h.1 == Enc::Utf16Le)
-        .map(|h| (h.0, h.2))
-        .collect();
-    let paired_le: std::collections::HashSet<(usize, u8)> = hits
-        .iter()
-        .filter(|h| h.1 == Enc::Utf16Be && le.contains(&(h.0 + 1, h.2)))
-        .map(|h| (h.0 + 1, h.2))
-        .collect();
-    let mut out = Vec::new();
-    for (off, enc, key) in hits {
-        if enc == Enc::Utf16Le && paired_le.contains(&(off, key)) {
-            continue;
-        }
-        let mut label = enc_label(enc, key);
-        if enc == Enc::Utf16Be && paired_le.contains(&(off + 1, key)) {
-            label = label.replacen("utf16be", "utf16le|be", 1);
-        }
-        out.push((off, label));
+/// Finds every `(offset, needle, key)` where `data[offset..]` is a needle XORed
+/// with `key`, in a single pass over `data` for all needles.
+///
+/// XOR doesn't change the XOR of neighbouring bytes. So the first three bytes of a
+/// match have the same two "difference bytes" as the needle, whatever the key.
+/// Needles are indexed by those, and each position only checks the needles whose
+/// prefix fits. The first byte then fixes the only possible key. Needles shorter
+/// than 3 bytes are checked at every position.
+fn find_xored<'n>(data: &[u8], needles: &'n [Needle], keys: &[u8]) -> Vec<(usize, &'n Needle, u8)> {
+    fn diff_key(b: &[u8]) -> usize {
+        (((b[0] ^ b[1]) as usize) << 8) | (b[1] ^ b[2]) as usize
     }
-    out
-}
+    let mut index: Vec<Vec<&Needle>> = vec![Vec::new(); 1 << 16];
+    let mut short: Vec<&Needle> = Vec::new();
+    for n in needles.iter().filter(|n| !n.bytes.is_empty()) {
+        match n.bytes.len() {
+            1 | 2 => short.push(n),
+            _ => index[diff_key(&n.bytes)].push(n),
+        }
+    }
 
-/// Finds every `(offset, key)` where `data[offset..]` equals `needle` XORed with
-/// `key`. Each offset's first byte fixes the only possible key, so one pass covers
-/// all 256 keys. With `brute == false`, only `keys` are accepted.
-fn find_xored(data: &[u8], needle: &[u8], brute: bool, keys: &[u8]) -> Vec<(usize, u8)> {
     let mut hits = Vec::new();
-    if needle.is_empty() || needle.len() > data.len() {
-        return hits;
-    }
-    for i in 0..=data.len() - needle.len() {
-        let key = data[i] ^ needle[0];
-        if !brute && !keys.contains(&key) {
-            continue;
-        }
-        if data[i + 1..i + needle.len()]
-            .iter()
-            .zip(&needle[1..])
-            .all(|(b, n)| b ^ key == *n)
-        {
-            hits.push((i, key));
+    for i in 0..data.len() {
+        let candidates = match data.get(i..i + 3) {
+            Some(prefix) => index[diff_key(prefix)].as_slice(),
+            None => &[],
+        };
+        for &n in candidates.iter().chain(&short) {
+            let key = data[i] ^ n.bytes[0];
+            if !n.brute && !keys.contains(&key) {
+                continue;
+            }
+            let Some(window) = data.get(i..i + n.bytes.len()) else {
+                continue;
+            };
+            if window.iter().zip(&n.bytes).all(|(b, x)| b ^ key == *x) {
+                hits.push((i, n, key));
+            }
         }
     }
     hits
@@ -539,41 +540,52 @@ impl Sections {
         if d.get(..6)? != b"\x7fELF\x02\x01" {
             return None;
         }
-        let u16_at =
-            |o: usize| Some(u16::from_le_bytes(d.get(o..o + 2)?.try_into().ok()?) as usize);
-        let u32_at =
-            |o: usize| Some(u32::from_le_bytes(d.get(o..o + 4)?.try_into().ok()?) as usize);
-        let u64_at =
-            |o: usize| Some(u64::from_le_bytes(d.get(o..o + 8)?.try_into().ok()?) as usize);
+        // Little-endian unsigned integer of `n` bytes at offset `o`.
+        let at = |o: usize, n: usize| {
+            let bytes = d.get(o..o.checked_add(n)?)?;
+            Some(bytes.iter().rev().fold(0, |a, &b| (a << 8) | b as usize))
+        };
 
-        let shoff = u64_at(0x28)?;
-        let shentsize = u16_at(0x3a)?;
-        let shnum = u16_at(0x3c)?;
-        let shstrndx = u16_at(0x3e)?;
+        let shoff = at(0x28, 8)?;
+        let shentsize = at(0x3a, 2)?;
+        let shnum = at(0x3c, 2)?;
+        let shstrndx = at(0x3e, 2)?;
         let header = |i: usize| shoff + i * shentsize;
-        let strtab = u64_at(header(shstrndx) + 0x18)?;
+        let strtab = at(header(shstrndx) + 0x18, 8)?;
 
         let mut out = Vec::new();
         for i in 1..shnum {
             let h = header(i);
             const SHT_NOBITS: usize = 8;
-            if u32_at(h + 4)? == SHT_NOBITS {
+            if at(h + 4, 4)? == SHT_NOBITS {
                 continue;
             }
-            let name_off = strtab + u32_at(h)?;
+            let name_off = strtab + at(h, 4)?;
             let name_len = d.get(name_off..)?.iter().position(|&b| b == 0)?;
             let name = String::from_utf8_lossy(&d[name_off..name_off + name_len]).into_owned();
-            let (offset, size) = (u64_at(h + 0x18)?, u64_at(h + 0x20)?);
+            let (offset, size) = (at(h + 0x18, 8)?, at(h + 0x20, 8)?);
             out.push((name, offset, offset + size));
         }
         Some(out)
     }
 
-    fn starts(&self) -> Vec<usize> {
-        let mut v: Vec<usize> = self.0.iter().map(|s| s.1).collect();
-        v.sort_unstable();
-        v.dedup();
-        v
+    /// Splits `0..len` at every section start and end. Each piece lies inside at
+    /// most one section, so a string never spans a boundary. That keeps the zero
+    /// padding between sections, which XOR turns into printable bytes, from being
+    /// glued onto a string. Gaps get the name "-".
+    fn pieces(&self, len: usize) -> Vec<(std::ops::Range<usize>, &str)> {
+        let mut cuts: Vec<usize> = self
+            .0
+            .iter()
+            .flat_map(|s| [s.1, s.2])
+            .chain([0, len])
+            .filter(|&c| c <= len)
+            .collect();
+        cuts.sort_unstable();
+        cuts.dedup();
+        cuts.windows(2)
+            .map(|w| (w[0]..w[1], self.name_at(w[0])))
+            .collect()
     }
 
     fn name_at(&self, offset: usize) -> &str {
