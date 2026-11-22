@@ -102,13 +102,31 @@ contaminate!(settings = XORED, section = ".data");
 `.rodata`). It must stay a string literal — `#[link_section]` requires one —
 which is why it is a macro argument rather than a `Settings` field.
 
-Run the demo to see four copies with different settings in one binary:
+## Examples
+
+| Example | What it shows |
+|---|---|
+| `minimal` | One `contaminate!()` with default settings |
+| `demo` | Four copies with different settings and sections in one binary |
+| `hidden` | Only XOR'd and UTF-16 copies; plain `strings` finds none of them |
+| `selfcheck` | Reads its own executable and exits non-zero if its copy didn't survive the build |
+| `analyze` | A `strings`-style analyzer: UTF-8/UTF-16LE/UTF-16BE, XOR keys, ELF section labels, and a wordlist check mode |
 
 ```sh
-cargo build --release --example demo --features all-wordlists
-strings target/release/examples/demo | grep CONTAMINATE       # UTF-8 copies
-strings -e l target/release/examples/demo | grep CONTAMINATE  # UTF-16LE copy
+cargo build --release --examples
+E=target/release/examples
+
+strings $E/demo | grep CANARY_                # UTF-8 copies
+$E/analyze $E/demo | grep -i canary          # every copy, with offset, section and encoding
+$E/analyze -x 0x5a $E/hidden                  # also decode with XOR key 0x5a
+$E/analyze -s $E/demo                         # counts per section and encoding
+$E/analyze -w $E/hidden                       # find every word under any encoding/XOR key; exit 1 if any is missing
+RUSTFLAGS="-C lto=fat -C strip=symbols" cargo run --release --example selfcheck
 ```
+
+`analyze -W FILE` checks for the words in any wordlist file instead of the one
+compiled in. ASCII UTF-16LE and UTF-16BE are the same bytes shifted by one,
+so `analyze` reports such matches as `utf16le|be`.
 
 ## Notes
 
@@ -126,3 +144,14 @@ strings -e l target/release/examples/demo | grep CONTAMINATE  # UTF-16LE copy
   text.
 - `strings` only shows ASCII by default; for the unicode and UTF-16 lists try
   `strings -e S`, `strings -e l`, or `grep -a`.
+
+## License
+
+Licensed under either of
+
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or
+  <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or
+  <http://opensource.org/licenses/MIT>)
+
+at your option.
