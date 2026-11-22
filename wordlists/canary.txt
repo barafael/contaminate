@@ -1,0 +1,6 @@
+# Unique marker strings that are easy to grep for.
+# One entry per line; blank lines and lines starting with '#' are ignored.
+CONTAMINATE_CANARY_7f3a9c21
+CONTAMINATE_CANARY_b04e55d8
+CONTAMINATE_CANARY_e19d6a03
+contaminate-canary://marker/0001

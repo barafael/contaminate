@@ -2,5 +2,13 @@
 name = "contaminate"
 version = "0.1.0"
 edition = "2024"
+description = "Sprinkle static strings from a wordlist into a binary, for testing binary-inspection tools"
+build = "build.rs"
+
+[features]
+default = ["wordlist-canary"]
+# Each `wordlist-<name>` feature pulls in `wordlists/<name>.txt`.
+wordlist-canary = []
+wordlist-secrets = []
 
 [dependencies]
