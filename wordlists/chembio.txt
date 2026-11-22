@@ -1,0 +1,90 @@
+# Chemical and biological threat indicators for biosecurity screeners,
+# export-control tools and threat-intel YARA rules.
+# Encyclopedic facts only: agent names, public agent codes, treaty and
+# regulatory designations, and historical incidents. No protocols,
+# parameters, quantities or procedures of any kind.
+
+# Bacterial agents and toxins
+Bacillus anthracis
+Yersinia pestis
+Francisella tularensis
+Burkholderia mallei
+Burkholderia pseudomallei
+Coxiella burnetii
+Brucella suis
+Clostridium botulinum
+botulinum toxin
+Staphylococcal enterotoxin B
+ricin
+abrin
+T-2 mycotoxin
+
+# Viral agents
+Variola major
+Ebola virus
+Marburg virus
+Lassa virus
+Junin virus
+Machupo virus
+Nipah virus
+Hendra virus
+Crimean-Congo hemorrhagic fever virus
+Venezuelan equine encephalitis virus
+avian influenza A H5N1
+smallpox
+
+# Chemical warfare agents (public names and agent codes)
+sarin
+soman
+tabun
+VX
+cyclosarin
+sulfur mustard
+nitrogen mustard
+HN-2
+lewisite
+phosgene
+chlorine
+hydrogen cyanide
+CS gas
+carfentanil
+
+# Treaties, schedules and regulatory designations
+Chemical Weapons Convention
+Biological Weapons Convention
+OPCW
+Schedule 1
+Australia Group
+Select Agents and Toxins List
+WHO Risk Group 4
+BSL-4
+Dual-Use Research of Concern
+Gain-of-Function Research
+Enhanced Potential Pandemic Pathogen
+NSABB
+synthesis screening
+dual-use screening
+
+# Containment and escape-research vocabulary
+containment breach
+lab-acquired infection
+biosafety level four
+enhanced transmission
+aerosol transmissible
+aerosolized anthrax spores
+weaponized smallpox
+bioterrorism
+offensive biological weapons program
+laced mail
+
+# Historical incidents
+Sverdlovsk anthrax leak
+Amerithrax
+2001 anthrax attacks
+Rajneeshee bioterror attack
+Aum Shinrikyo
+Matsumoto sarin attack
+Tokyo subway sarin attack
+Halabja chemical attack
+Fort Detrick
+2014 CDC anthrax incident

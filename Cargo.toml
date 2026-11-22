@@ -10,6 +10,7 @@ default = ["wordlist-canary"]
 # Each `wordlist-<name>` feature pulls in `wordlists/<name>.txt`.
 wordlist-artifacts = []
 wordlist-canary = []
+wordlist-chembio = []
 wordlist-crypto = []
 wordlist-cve = []
 wordlist-edge-cases = []
@@ -25,6 +26,7 @@ wordlist-unicode = []
 all-wordlists = [
     "wordlist-artifacts",
     "wordlist-canary",
+    "wordlist-chembio",
     "wordlist-crypto",
     "wordlist-cve",
     "wordlist-edge-cases",
